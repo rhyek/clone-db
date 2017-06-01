@@ -4,39 +4,83 @@ const path = require('path')
 const os = require('os')
 const fs = require('fs')
 
-// const configs = {
-//   test: {
-//     host: 'root@git.cs.com.gt',
-//     remotedb: {
-//       username: 'cgonzales',
-//       password: 'cgonzales',
-//       database: 'clone_db_test_1'
-//     },
-//     localdb: {
-//       username: 'root',
-//       password: 'root',
-//       database: 'clone_db_test_1_local'
-//     }
-//   }
-// }
+const configFileInitContent = `
+{
+  "test": {
+    "source": {
+      "ssh": true,
+      "host": "test@test",
+      "db": {
+        "username": "test",
+        "password": "test",
+        "database": "test_remote"
+      }
+    },
+    "target": {
+      "ssh": false,
+      "db": {
+        "username": "test",
+        "password": "test",
+        "database": "test_local"
+      }
+    }
+  }
+}
+`
 
-const configs = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.clonedb')))
+const text = process.argv[2]
+const configFilePath = path.join(os.homedir(), '.clonedb')
 
-const config = configs[process.argv[2]]
+if (text === 'init') {
+  if (fs.existsSync(configFilePath)) {
+    console.log('Config file already exists.')
+    process.exit(1)
+  }
+  else {
+    fs.writeFileSync(configFilePath, configFileInitContent)
+    console.log(`Config file created at ${ configFilePath }`)
+    process.exit(0)
+  }
+}
 
-exec(`ssh ${ config.host } mysqldump -u ${ config.remotedb.username } --password=${ config.remotedb.password} ${ config.remotedb.database} | sed -e 's/DEFINER[ ]*=[ ]*[^*]*\\*/\\*/' > /tmp/clonedbdump`, (error, stdout, stderr) => {
+const configs = JSON.parse(fs.readFileSync(configFilePath))
+
+const config = configs[text]
+
+if (!config) {
+  console.log('Config not found.')
+  process.exit(1)
+}
+
+function stripWarnings (text) {
+  return text
+    .split('\n')
+    .filter(line => !line.includes('[Warning] Using a password'))
+    .join()
+}
+
+exec(`${ config.source.ssh ? `ssh ${ config.source.host } ` : '' }mysqldump -u ${ config.source.db.username } --password=${ config.source.db.password} ${ config.source.db.database} | sed -e 's/DEFINER[ ]*=[ ]*[^*]*\\*/\\*/' > /tmp/clonedbdump`, (error, stdout, stderr) => {
   if (error) {
     console.log(error)
   }
+  else if (stripWarnings(stderr)) {
+    console.log(stderr)
+  }
   else {
-    exec(`mysql -u ${ config.localdb.username } --password=${ config.localdb.password } -e 'drop database if exists ${ config.localdb.database }; create database ${ config.localdb.database };'`, (error, stdout, stderr) => {
+    exec(`${ config.target.ssh ? `ssh ${ config.target.host } ` : '' }mysql -u ${ config.target.db.username } --password=${ config.target.db.password } -e 'drop database if exists ${ config.target.db.database }; create database ${ config.target.db.database };'`, (error, stdout, stderr) => {
       if (error) {
         console.log(error)
       }
+      else if (stripWarnings(stderr)) {
+        console.log(stderr)
+      }
       else {
-        exec(`mysql -u ${ config.localdb.username } --password=${ config.localdb.password } ${ config.localdb.database } < /tmp/clonedbdump`, (error, stdout, stderr) => {
+        exec(`${ config.target.ssh ? `ssh ${ config.target.host } ` : '' }mysql -u ${ config.target.db.username } --password=${ config.target.db.password } ${ config.target.db.database } < /tmp/clonedbdump`, (error, stdout, stderr) => {
           if (error) {
             console.log(error)
+          }
+          else if (stripWarnings(stderr)) {
+            console.log(stderr)
           }
           else {
             console.log('Done!')

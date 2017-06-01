@@ -55,7 +55,7 @@ if (!config) {
 function stripWarnings (text) {
   return text
     .split('\n')
-    .filter(line => !line.includes('[Warning] Using a password'))
+    .filter(line => !line.includes('Using a password'))
     .join()
 }
 

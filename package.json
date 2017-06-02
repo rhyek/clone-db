@@ -1,13 +1,14 @@
 {
   "name": "clone-db",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "",
   "main": "main.js",
   "scripts": {},
   "bin": {
     "clonedb": "./main.js"
   },
-  "author": "",
+  "author": "Carlos Gonzales <carlos.rgn@gmail.com>",
+  "repository": "github:rhyek/clone-db",
   "license": "ISC",
   "dependencies": {
     "command-line-args": "^4.0.6",

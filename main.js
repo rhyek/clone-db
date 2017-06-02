@@ -1,92 +1,106 @@
 #! /usr/bin/env node
-const exec = require('child_process').exec
 const path = require('path')
 const os = require('os')
 const fs = require('fs')
+const commandLineArgs = require('command-line-args')
+const getUsage = require('command-line-usage')
+const { error } = require('./utils')
 
-const configFileInitContent = `
-{
-  "test": {
-    "source": {
-      "ssh": true,
-      "host": "test@test",
-      "db": {
-        "username": "test",
-        "password": "test",
-        "database": "test_remote"
-      }
+const optionDefinitions = [
+  {
+    name: 'help',
+    alias: 'h',
+    type: Boolean,
+
+    description: 'Display this usage guide.'
+  },
+  {
+    name: 'init',
+    alias: 'i',
+    type: Boolean,
+
+    description: 'Create a sample configuration file in the current user\'s home directory.'
+  },
+  {
+    name: 'config-path',
+    alias: 'p',
+    type: Boolean,
+
+    description: 'Print configuration file path.'
+  },
+  {
+    name: 'list',
+    alias: 'l',
+    type: Boolean,
+
+    description: 'List available configurations.'
+  },
+  {
+    name: 'config',
+    alias: 'c',
+    type: String,
+    defaultOption: true,
+
+    description: 'Specify the configuration to use.',
+    typeLabel: '[underline]{config}'
+  }
+]
+
+const options = commandLineArgs(optionDefinitions)
+
+if (options.help) {
+  const sections = [
+    {
+      header: 'Clone DB',
+      content: 'A utility for cloning databases using pre-configured settings.'
     },
-    "target": {
-      "ssh": false,
-      "db": {
-        "username": "test",
-        "password": "test",
-        "database": "test_local"
+    {
+      header: 'Synopsis',
+      content: [
+        '$ clonedb [underline]{config}',
+        '$ clonedb [bold]{--config} [underline]{config}'
+      ]
+    },
+    {
+      header: 'Options',
+      optionList: optionDefinitions
+    }
+  ]
+  console.log(getUsage(sections))
+}
+else {
+  const configFilePath = path.join(os.homedir(), '.clonedb')
+  if (options.init) {
+    if (fs.existsSync(configFilePath)) {
+      error('Config file already exists.')
+    }
+    else {
+      fs.writeFileSync(configFilePath, fs.readFileSync(path.join(__dirname, 'sample-config.json')))
+      console.log(`Config file created at ${ configFilePath }.`)
+    }
+  }
+  else if (options['config-path']) {
+    console.log(configFilePath)
+  }
+  else {
+    const configs = JSON.parse(fs.readFileSync(configFilePath))
+    if (options.list) {
+      console.log('Available configurations:')
+      for (let [name, config] of Object.entries(configs)) {
+        console.log(` ${ name }${ config.description ? ` - ${ config.description }` : '' }`)
+      }
+    }
+    else if (!options.config) {
+      error('clonedb: Missing configuration name.\nTry \'clonedb --help\' for more information.')
+    }
+    else {
+      const config = configs[options.config]
+      if (!config) {
+        error('Configuration not found.')
+      }
+      else {
+        require(`./engines/${ config.engine }`)(config)
       }
     }
   }
 }
-`
-
-const text = process.argv[2]
-const configFilePath = path.join(os.homedir(), '.clonedb')
-
-if (text === 'init') {
-  if (fs.existsSync(configFilePath)) {
-    console.log('Config file already exists.')
-    process.exit(1)
-  }
-  else {
-    fs.writeFileSync(configFilePath, configFileInitContent)
-    console.log(`Config file created at ${ configFilePath }`)
-    process.exit(0)
-  }
-}
-
-const configs = JSON.parse(fs.readFileSync(configFilePath))
-
-const config = configs[text]
-
-if (!config) {
-  console.log('Config not found.')
-  process.exit(1)
-}
-
-function stripWarnings (text) {
-  return text
-    .split('\n')
-    .filter(line => !line.includes('Using a password'))
-    .join()
-}
-
-exec(`${ config.source.ssh ? `ssh ${ config.source.host } ` : '' }mysqldump -u ${ config.source.db.username } --password=${ config.source.db.password} ${ config.source.db.database} | sed -e 's/DEFINER[ ]*=[ ]*[^*]*\\*/\\*/' > /tmp/clonedbdump`, (error, stdout, stderr) => {
-  if (error) {
-    console.log(error)
-  }
-  else if (stripWarnings(stderr)) {
-    console.log(stderr)
-  }
-  else {
-    exec(`${ config.target.ssh ? `ssh ${ config.target.host } ` : '' }mysql -u ${ config.target.db.username } --password=${ config.target.db.password } -e 'drop database if exists ${ config.target.db.database }; create database ${ config.target.db.database };'`, (error, stdout, stderr) => {
-      if (error) {
-        console.log(error)
-      }
-      else if (stripWarnings(stderr)) {
-        console.log(stderr)
-      }
-      else {
-        exec(`${ config.target.ssh ? `ssh ${ config.target.host } ` : '' }mysql -u ${ config.target.db.username } --password=${ config.target.db.password } ${ config.target.db.database } < /tmp/clonedbdump`, (error, stdout, stderr) => {
-          if (error) {
-            console.log(error)
-          }
-          else if (stripWarnings(stderr)) {
-            console.log(stderr)
-          }
-          else {
-            console.log('Done!')
-          }
-        })
-      }
-    })
-  }
-})

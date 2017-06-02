@@ -17,7 +17,7 @@ module.exports = async function (config) {
       command: `${ config.target.ssh ? `ssh ${ config.target.host } ` : '' }mysql -u ${ config.target.db.username } --password=${ config.target.db.password } -e 'drop database if exists ${ config.target.db.database }; create database ${ config.target.db.database };'`
     },
     {
-      message: 'Restore',
+      message: 'Restore.',
       command: `${ config.target.ssh ? `ssh ${ config.target.host } ` : '' }mysql -u ${ config.target.db.username } --password=${ config.target.db.password } ${ config.target.db.database } < /tmp/clonedbdump`
     }
   ]

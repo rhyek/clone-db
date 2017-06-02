@@ -4,6 +4,7 @@ const os = require('os')
 const fs = require('fs')
 const commandLineArgs = require('command-line-args')
 const getUsage = require('command-line-usage')
+const inquirer = require('inquirer')
 const { error } = require('./utils')
 
 const optionDefinitions = [
@@ -43,6 +44,13 @@ const optionDefinitions = [
 
     description: 'Specify the configuration to use.',
     typeLabel: '[underline]{config}'
+  },
+  {
+    name: 'select',
+    alias: 's',
+    type: Boolean,
+
+    description: 'Choose from one of the available configurations.'
   }
 ]
 
@@ -85,22 +93,40 @@ else {
   else {
     const configs = JSON.parse(fs.readFileSync(configFilePath))
     if (options.list) {
-      console.log('Available configurations:')
-      for (let [name, config] of Object.entries(configs)) {
-        console.log(` ${ name }${ config.description ? ` - ${ config.description }` : '' }`)
+      for (let config of Object.keys(configs)) {
+        console.log(config)
       }
-    }
-    else if (!options.config) {
-      error('clonedb: Missing configuration name.\nTry \'clonedb --help\' for more information.')
     }
     else {
-      const config = configs[options.config]
-      if (!config) {
-        error('Configuration not found.')
+      let p
+      if (options.select) {
+        p = inquirer
+          .prompt([
+            {
+              type: 'list',
+              name: 'config',
+              message: 'Choose the configuration.',
+              choices: Object.keys(configs)
+            }
+          ])
+          .then(answers => answers.config)
       }
       else {
-        require(`./engines/${ config.engine }`)(config)
+        if (!options.config) {
+          error('clonedb: Missing configuration name.\nTry \'clonedb --help\' for more information.')
+        }
+        p = Promise.resolve(options.config)
       }
+      p.then(name => {
+        const config = configs[name]
+        if (!config) {
+          error('Configuration not found.')
+        }
+        else {
+          require(`./engines/${ config.engine }`)(config)
+        }
+      })
     }
   }
 }
+

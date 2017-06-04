@@ -9,7 +9,7 @@ module.exports = {
   timerEnd (name = 'default') {
     return new Date () - timers[name]
   },
-  error (text) {
+  logError (text) {
     console.error(text)
     process.exit(1)
   }

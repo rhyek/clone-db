@@ -2,10 +2,13 @@
 const path = require('path')
 const os = require('os')
 const fs = require('fs')
+const exec = require('child_process').exec
+const ora = require('ora')
+const prettyMs = require('pretty-ms')
 const commandLineArgs = require('command-line-args')
 const getUsage = require('command-line-usage')
 const inquirer = require('inquirer')
-const { error } = require('./utils')
+const { timerStart, timerEnd, logError } = require('./utils')
 
 const optionDefinitions = [
   {
@@ -65,6 +68,7 @@ if (options.help) {
     {
       header: 'Synopsis',
       content: [
+        '$ clonedb',
         '$ clonedb [underline]{config}',
         '$ clonedb [bold]{--config} [underline]{config}'
       ]
@@ -80,7 +84,7 @@ else {
   const configFilePath = path.join(os.homedir(), '.clonedb')
   if (options.init) {
     if (fs.existsSync(configFilePath)) {
-      error('Config file already exists.')
+      logError('Config file already exists.')
     }
     else {
       fs.writeFileSync(configFilePath, fs.readFileSync(path.join(__dirname, 'sample-config.json')))
@@ -99,7 +103,7 @@ else {
     }
     else {
       let p
-      if (options.select) {
+      if (options.select || !options.config) {
         p = inquirer
           .prompt([
             {
@@ -112,21 +116,44 @@ else {
           .then(answers => answers.config)
       }
       else {
-        if (!options.config) {
-          error('clonedb: Missing configuration name.\nTry \'clonedb --help\' for more information.')
-        }
         p = Promise.resolve(options.config)
       }
-      p.then(name => {
+      p.then(async name => {
         const config = configs[name]
         if (!config) {
-          error('Configuration not found.')
+          logError('Configuration not found.')
         }
         else {
-          require(`./engines/${ config.engine }`)(config)
+          const commands = require(`./engines/${ config.engine }`)(config)
+          timerStart('global')
+          for (let { message, command, skipWarnings } of commands) {
+            timerStart()
+            let spinner = ora(message).start()
+            try {
+              await new Promise((resolve, reject) => {
+                exec(command, (error, stdout, stderr) => {
+                  stderr = stderr
+                    .split('\n')
+                    .filter(line => !skipWarnings || skipWarnings.every(warning => !line.includes(warning)))
+                    .join()
+                  for (thing of [error, stderr]) {
+                    if (thing) {
+                      reject(thing)
+                    }
+                  }
+                  resolve(stdout)
+                })
+              })
+              spinner.succeed(`${ spinner.text } ${ prettyMs(timerEnd()) }`)
+            }
+            catch (error) {
+              spinner.fail()
+              logError(error)
+            }
+          }
+          console.log(`Done! Total duration: ${ prettyMs(timerEnd('global')) }`)
         }
       })
     }
   }
 }
-

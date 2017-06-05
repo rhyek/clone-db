@@ -54,6 +54,13 @@ const optionDefinitions = [
     type: Boolean,
 
     description: 'Choose from one of the available configurations.'
+  },
+  {
+    name: 'version',
+    alias: 'v',
+    type: Boolean,
+
+    description: 'Display the version number.'
   }
 ]
 
@@ -93,6 +100,9 @@ else {
   }
   else if (options['config-path']) {
     console.log(configFilePath)
+  }
+  else if (options.version) {
+    console.log(require('./package.json').version)
   }
   else {
     const configs = JSON.parse(fs.readFileSync(configFilePath))

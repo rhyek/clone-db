@@ -20,6 +20,10 @@ module.exports = function (config) {
     {
       message: 'Restore.',
       command: `${ config.target.ssh ? `ssh -p ${ config.target.port || 22 } ${ config.target.host } ` : '' }${ config.target.db.password ? `PGPASSWORD="${ config.target.db.password }"` : '' } pg_restore -O -e -Fc -h localhost -U ${ config.target.db.username } -d ${ config.target.db.database } /tmp/clonedbdump`
+    },
+    {
+      message: `Delete ${ emoji.get(':poop:') } file.`,
+      command: 'rm /tmp/clonedbdump*'
     }
   ]
 }

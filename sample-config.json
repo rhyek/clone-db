@@ -17,6 +17,9 @@
         "password": "test",
         "database": "test_local"
       }
-    }
+    },
+    "after": [
+      "insert into some_table (name) values ('Freddie Mercury')"
+    ]
   }
 }

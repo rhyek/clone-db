@@ -8,6 +8,7 @@ const prettyMs = require('pretty-ms')
 const commandLineArgs = require('command-line-args')
 const getUsage = require('command-line-usage')
 const inquirer = require('inquirer')
+const chalk = require('chalk')
 const { timerStart, timerEnd, logError } = require('./utils')
 
 const optionDefinitions = [
@@ -134,34 +135,58 @@ else {
           logError('Configuration not found.')
         }
         else {
-          const commands = require(`./engines/${ config.engine }`)(config)
-          timerStart('global')
-          for (let { message, command, skipWarnings } of commands) {
-            timerStart()
-            let spinner = ora(message).start()
-            try {
-              await new Promise((resolve, reject) => {
-                exec(command, (error, stdout, stderr) => {
-                  stderr = stderr
-                    .split('\n')
-                    .filter(line => !skipWarnings || skipWarnings.every(warning => !line.includes(warning)))
-                    .join()
-                  for (thing of [error, stderr]) {
-                    if (thing) {
-                      reject(thing)
-                    }
-                  }
-                  resolve(stdout)
-                })
+          const engine = require(`./engines/${ config.engine }`)
+          const commands = engine.commands(config)
+          if (config.after) {
+            commands.push({
+              message: '\nRunning SQL statements on target database.'
+            })
+            for (let sql of config.after) {
+              commands.push({
+                message: chalk.cyan(sql),
+                command: engine.runSQL(config, sql),
+                print: true
               })
-              spinner.succeed(`${ spinner.text } ${ prettyMs(timerEnd()) }`)
-            }
-            catch (error) {
-              spinner.fail()
-              logError(error)
             }
           }
-          console.log(`Done! Total duration: ${ prettyMs(timerEnd('global')) }`)
+          timerStart('global')
+          for (let { message, command, skipWarnings, print } of commands) {
+            if (command) {
+              timerStart()
+              let spinner = ora(message).start()
+              try {
+                let stdout = (await new Promise((resolve, reject) => {
+                  exec(command, (error, stdout, stderr) => {
+                    stderr = stderr
+                      .split('\n')
+                      .filter(line => !skipWarnings || skipWarnings.every(warning => !line.includes(warning)))
+                      .join()
+                    for (thing of [error, stderr]) {
+                      if (thing) {
+                        reject(thing)
+                      }
+                    }
+                    resolve(stdout)
+                  })
+                })).trim()
+                spinner.succeed(`${ spinner.text } ${ prettyMs(timerEnd()) }`)
+                if (print && stdout) {
+                  if (typeof print === 'function') {
+                    stdout = print(stdout)
+                  }
+                  console.log(chalk.yellow(stdout))
+                }
+              }
+              catch (error) {
+                spinner.fail()
+                logError(error)
+              }
+            }
+            else {
+              console.log(message)
+            }
+          }
+          console.log(`\nDone! Total duration: ${ prettyMs(timerEnd('global')) }`)
         }
       })
     }

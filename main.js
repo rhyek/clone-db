@@ -9,7 +9,7 @@ const commandLineArgs = require('command-line-args')
 const getUsage = require('command-line-usage')
 const inquirer = require('inquirer')
 const chalk = require('chalk')
-const { timerStart, timerEnd, logError } = require('./utils')
+const { timerStart, timerEnd, logError, configuration } = require('./utils')
 
 const optionDefinitions = [
   {
@@ -25,6 +25,13 @@ const optionDefinitions = [
     type: Boolean,
 
     description: 'Create a sample configuration file in the current user\'s home directory.'
+  },
+  {
+    name: 'upgrade-config',
+    alias: 'u',
+    type: Boolean,
+
+    description: 'Upgrade the configuration file.'
   },
   {
     name: 'config-path',
@@ -62,6 +69,13 @@ const optionDefinitions = [
     type: Boolean,
 
     description: 'Display the version number.'
+  },
+  {
+    name: 'debug',
+    alias: 'd',
+    type: Boolean,
+
+    description: 'Show shell commands.'
   }
 ]
 
@@ -89,24 +103,26 @@ if (options.help) {
   console.log(getUsage(sections))
 }
 else {
-  const configFilePath = path.join(os.homedir(), '.clonedb')
   if (options.init) {
-    if (fs.existsSync(configFilePath)) {
+    if (configuration.exists) {
       logError('Config file already exists.')
     }
     else {
-      fs.writeFileSync(configFilePath, fs.readFileSync(path.join(__dirname, 'sample-config.json')))
-      console.log(`Config file created at ${ configFilePath }.`)
+      fs.writeFileSync(configuration.path, fs.readFileSync(path.join(__dirname, 'sample-config.json')))
+      console.log(`Config file created at ${ configuration.path }.`)
     }
   }
+  else if (options['upgrade-config']) {
+    require('./upgrade-config')
+  }
   else if (options['config-path']) {
-    console.log(configFilePath)
+    console.log(configuration.path)
   }
   else if (options.version) {
     console.log(require('./package.json').version)
   }
   else {
-    const configs = JSON.parse(fs.readFileSync(configFilePath))
+    const configs = configuration.configs
     if (options.list) {
       for (let config of Object.keys(configs)) {
         console.log(config)
@@ -137,22 +153,25 @@ else {
         else {
           const engine = require(`./engines/${ config.engine }`)
           const commands = engine.commands(config)
-          if (config.after) {
-            commands.push({
-              message: '\nRunning SQL statements on target database.'
-            })
-            for (let sql of config.after) {
-              commands.push({
-                message: chalk.cyan(sql),
-                command: engine.runSQL(config, sql),
-                print: true
-              })
-            }
-          }
+          // if (config.after) {
+          //   commands.push({
+          //     message: '\nRunning SQL statements on target database.'
+          //   })
+          //   for (let sql of config.after) {
+          //     commands.push({
+          //       message: chalk.cyan(sql),
+          //       command: engine.runSQL(config, sql),
+          //       print: true
+          //     })
+          //   }
+          // }
           timerStart('global')
           for (let { message, command, skipWarnings, print } of commands) {
             if (command) {
               timerStart()
+              if (options.debug) {
+                console.log(chalk.red(command))
+              }
               let spinner = ora(message).start()
               try {
                 let stdout = (await new Promise((resolve, reject) => {

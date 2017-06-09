@@ -1,23 +1,72 @@
 const emoji = require('node-emoji')
 
+function db (context, program, suffix) {
+  let command = ''
+  if (context.db.password) {
+    command += `MYSQL_PWD="${ context.db.password }" ` 
+  }
+  command += `${ program } -h ${ context.db.host ? context.db.host : 'localhost' } -P ${ context.db.port ? context.db.port : 3306 } -u ${ context.db.username } `
+  command += suffix
+  return command
+}
+
+function build (context, commands, redirect) {
+  let command = ''
+  if (context.ssh) {
+    command += `ssh -p ${ context.ssh.port || 22 } ${ context.ssh.host }`
+  }
+  else {
+    command += 'sh -c'
+  }
+  command +=  ` '${ commands }'`
+  if (redirect) {
+    if (redirect.out) {
+      command += ` > ${ redirect.out }`
+    }
+    if (redirect.in) {
+      command += ` < ${ redirect.in }`
+    }
+  }
+  return command
+}
+
 module.exports = {
   commands (config) {
     return [
       {
         message: `Generate and download ${ emoji.get(':poop:') }  file.`,
-        command: `${ config.source.ssh ? `ssh -p ${ config.source.port || 22 } ${ config.source.host } ` : '' }${ config.source.db.password ? `MYSQL_PWD="${ config.source.db.password }"` : '' } mysqldump -h ${ config.source.db.host ? config.source.db.host : 'localhost' } -u ${ config.source.db.username } -R ${ config.source.db.database} | sed -e 's/DEFINER[ ]*=[ ]*[^*]*\\*/\\*/' | sed -e 's/DEFINER[ ]*=[ ]*[^*]*PROCEDURE/PROCEDURE/' | sed -e 's/DEFINER[ ]*=[ ]*[^*]*FUNCTION/FUNCTION/' | gzip -c9 > /tmp/clonedbdump.gz`
-      },
-      {
-        message: 'Decompress.',
-        command: 'gzip -dc /tmp/clonedbdump.gz > /tmp/clonedbdump'
+        command: build(
+          config.source,
+          db(
+            config.source,
+            'mysqldump',
+            `-R ${ config.source.db.database} | sed -e "s/DEFINER[ ]*=[ ]*[^*]*\\*/\\*/" -e "s/DEFINER[ ]*=[ ]*[^*]*PROCEDURE/PROCEDURE/" -e "s/DEFINER[ ]*=[ ]*[^*]*FUNCTION/FUNCTION/" | gzip -c9`
+          ),
+          { out: '/tmp/clonedbdump.gz' }
+        )
       },
       {
         message: 'Drop and create database at target location.',
-        command: `${ config.target.ssh ? `ssh -p ${ config.target.port || 22 } ${ config.target.host } ` : '' }${ config.source.db.password ? `MYSQL_PWD="${ config.target.db.password }"` : '' } mysql -h ${ config.target.db.host ? config.target.db.host : 'localhost' } -u ${ config.target.db.username } -e 'drop database if exists ${ config.target.db.database }; create database ${ config.target.db.database };'`
+        command: build(
+          config.target,
+          db(
+            config.target,
+            'mysql',
+            `-e "drop database if exists ${ config.target.db.database }; create database ${ config.target.db.database };"`
+          )
+        )
       },
       {
         message: 'Restore.',
-        command: `${ config.target.ssh ? `ssh -p ${ config.target.port || 22 } ${ config.target.host } ` : '' }${ config.source.db.password ? `MYSQL_PWD="${ config.target.db.password }"` : '' } mysql -h ${ config.target.db.host ? config.target.db.host : 'localhost' } -u ${ config.target.db.username } ${ config.target.db.database } < /tmp/clonedbdump`
+        command: build(
+          config.target,
+          'gzip -dc | ' + db(
+            config.target,
+            'mysql',
+            config.target.db.database
+          ),
+          { in: '/tmp/clonedbdump.gz' }
+        )
       },
       {
         message: `Delete ${ emoji.get(':poop:') }  file.`,
@@ -26,6 +75,13 @@ module.exports = {
     ]
   },
   runSQL (config, sql) {
-    return `${ config.target.ssh ? `ssh -p ${ config.target.port || 22 } ${ config.target.host } ` : '' }${ config.source.db.password ? `MYSQL_PWD="${ config.target.db.password }"` : '' } mysql -h ${ config.target.db.host ? config.target.db.host : 'localhost' } -u ${ config.target.db.username } -e "${ sql }" ${ config.target.db.database }`
+    return build(
+      config.target,
+      db(
+        config.target,
+        'mysql',
+        `-e "${ sql.replace(/'/g, `''`) }" ${ config.target.db.database }`
+      )
+    )
   }
 }

@@ -5,6 +5,7 @@
       "ssh": true,
       "host": "test@test",
       "db": {
+        "host": "localhost",
         "username": "test",
         "password": "test",
         "database": "test_remote"

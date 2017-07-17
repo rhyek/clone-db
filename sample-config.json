@@ -1,4 +1,7 @@
 {
+  "meta": {
+    "version": 2
+  },
   "test": {
     "engine": "mysql",
     "source": {

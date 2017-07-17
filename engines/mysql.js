@@ -39,8 +39,8 @@ module.exports = {
           config.source,
           db(
             config.source,
-            'LANG=C mysqldump',
-            `-R ${ config.source.db.database} | sed -e "s/DEFINER[ ]*=[ ]*[^*]*\\*/\\*/" -e "s/DEFINER[ ]*=[ ]*[^*]*PROCEDURE/PROCEDURE/" -e "s/DEFINER[ ]*=[ ]*[^*]*FUNCTION/FUNCTION/" | gzip -c9`
+            'LLANG=C LC_CTYPE=C LC_ALL=C mysqldump',
+            `-R ${ config.source.db.database} | LLANG=C LC_CTYPE=C LC_ALL=C sed -e "s/DEFINER[ ]*=[ ]*[^*]*\\*/\\*/" -e "s/DEFINER[ ]*=[ ]*[^*]*PROCEDURE/PROCEDURE/" -e "s/DEFINER[ ]*=[ ]*[^*]*FUNCTION/FUNCTION/" | gzip -c9`
           ),
           { out: '/tmp/clonedbdump.gz' }
         )

@@ -3,7 +3,7 @@ const emoji = require('node-emoji')
 function db (context, program, suffix) {
   let command = ''
   if (context.db.password) {
-    command += `MYSQL_PWD="${ context.db.password }" ` 
+    command += `MYSQL_PWD="${ context.db.password }" `
   }
   command += `${ program } -h ${ context.db.host ? context.db.host : 'localhost' } -P ${ context.db.port ? context.db.port : 3306 } -u ${ context.db.username } `
   command += suffix
@@ -40,7 +40,7 @@ module.exports = {
           db(
             config.source,
             'LLANG=C LC_CTYPE=C LC_ALL=C mysqldump',
-            `-R ${ config.source.db.database} | LLANG=C LC_CTYPE=C LC_ALL=C sed -e "s/DEFINER[ ]*=[ ]*[^*]*\\*/\\*/" -e "s/DEFINER[ ]*=[ ]*[^*]*PROCEDURE/PROCEDURE/" -e "s/DEFINER[ ]*=[ ]*[^*]*FUNCTION/FUNCTION/" | gzip -c9`
+            `--single-transaction --quick -R ${ config.source.db.database} | LLANG=C LC_CTYPE=C LC_ALL=C sed -e "s/DEFINER[ ]*=[ ]*[^*]*\\*/\\*/" -e "s/DEFINER[ ]*=[ ]*[^*]*PROCEDURE/PROCEDURE/" -e "s/DEFINER[ ]*=[ ]*[^*]*FUNCTION/FUNCTION/" | gzip -c9`
           ),
           { out: '/tmp/clonedbdump.gz' }
         )
